@@ -6,7 +6,7 @@ on:
       - 'photos/**.jpg'
       - 'photos/**.jpeg'
       - 'photos/**.png'
-
+workflow_dispatch:
 # CRITICAL: Grants the Action permission to commit back to your repository
 permissions:
   contents: write

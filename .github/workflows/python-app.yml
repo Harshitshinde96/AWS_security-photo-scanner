@@ -1,0 +1,38 @@
+name: Security Photo Scanner
+
+on:
+  push:
+    paths:
+      - 'employee.jpg' # The pipeline ONLY runs if this specific photo is added or updated
+
+jobs:
+  analyze-photo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install AWS SDK (Boto3)
+        run: pip install boto3
+
+      - name: Run Face Detection Script
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+        run: python analyze.py
+
+      # This step is critical! It saves the generated JSON file 
+      # so you can actually download and view it from the GitHub dashboard.
+      - name: Upload result.json as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rekognition-results
+          path: result.json

@@ -37,25 +37,19 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
         run: |
-          # 1. Identify which photos were just added or modified in the 'photos' folder
-          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep '^photos/.*\.\(jpg\|jpeg\|png\)$' || true)
+          # 1. Get the list of changed photos
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep -iE '^photos/.*\.(jpg|jpeg|png)$' || true)
           
           if [ -z "$CHANGED_FILES" ]; then
             echo "No new photos detected."
             exit 0
           fi
           
-          # CRITICAL FIX: Tell bash to only split items by newlines, not spaces!
-          IFS=$'\n'
-          
-          # 2. Loop through each new photo and run the Python script on it
-          for FILE in $CHANGED_FILES; do
-            echo "Processing $FILE..."
+          # 2. BULLETPROOF METHOD: Pipe the text directly into a while-read loop
+          echo "$CHANGED_FILES" | while read -r FILE; do
+            echo "Processing '$FILE'..."
             python analyze.py "$FILE"
           done
-          
-          # Reset IFS back to normal just to be safe
-          unset IFS
 
       - name: Commit and Push updated result.json
         run: |

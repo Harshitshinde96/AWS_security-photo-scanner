@@ -3,7 +3,13 @@ name: Security Photo Scanner
 on:
   push:
     paths:
-      - 'employee.jpg' # The pipeline ONLY runs if this specific photo is added or updated
+      - 'photos/**.jpg'
+      - 'photos/**.jpeg'
+      - 'photos/**.png'
+
+# CRITICAL: Grants the Action permission to commit back to your repository
+permissions:
+  contents: write
 
 jobs:
   analyze-photo:
@@ -12,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Required to compare the current commit with the previous one
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -21,18 +29,38 @@ jobs:
       - name: Install AWS SDK (Boto3)
         run: pip install boto3
 
-      - name: Run Face Detection Script
+      - name: Find New Photos and Run Scanner
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
-        run: python analyze.py
+        run: |
+          # 1. Identify which photos were just added or modified in the 'photos' folder
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD | grep '^photos/.*\.\(jpg\|jpeg\|png\)$' || true)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No new photos detected."
+            exit 0
+          fi
+          
+          # 2. Loop through each new photo and run the Python script on it
+          for FILE in $CHANGED_FILES; do
+            echo "Processing $FILE..."
+            python analyze.py "$FILE"
+          done
 
-      # This step is critical! It saves the generated JSON file 
-      # so you can actually download and view it from the GitHub dashboard.
-      - name: Upload result.json as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rekognition-results
-          path: result.json
+      - name: Commit and Push updated result.json
+        run: |
+          # Set up the GitHub Actions bot identity
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if result.json was modified. If yes, commit and push it.
+          if git diff --quiet result.json; then
+            echo "No changes to result.json"
+          else
+            git add result.json
+            git commit -m "Auto-update result.json with new photo analysis"
+            git push
+          fi
